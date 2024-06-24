@@ -54,6 +54,7 @@ class MyGlpi:
         self.config: Dict[str, Any] = {}
         self.users: Dict[str, Any] = {}
         self.groups: Dict[str, Any] = {}
+        self.emails: Dict[str, str] = {}
 
         self._get_env()
         try:
@@ -69,9 +70,32 @@ class MyGlpi:
             sys.exit(101)
 
         self.config = self.glpi.get_config()
+        self.get_emails()
+
+    def get_emails(
+        self,
+        what: str = "UserEmail",
+    ) -> None:
+        my_range: str = "0-10000"
+
+        u = self.glpi.get_all_items(
+            what,
+            range=my_range,
+            expand_dropdowns=True,
+        )
+
+        for item in u:
+            self._dumps(item)
+            email = item.get("email")
+            login = item.get("users_id")
+            is_default = bool(item.get("is_default"))
+            if is_default:
+                self.emails[login] = email
 
     @staticmethod
     def _dumps(item: Any) -> None:
+        return
+
         print(
             json.dumps(
                 item,
@@ -108,107 +132,66 @@ class MyGlpi:
             rr[oo[k]["name"]] = v
         return rr
 
-    def get_user(
-        self,
-        id: str,
-        what: str = "User",
-    ) -> Any:
-        rr = self.glpi.get_item(
-            what,
-            item_id=id,
-            expand_dropdowns=True,
-            range="0-1",
-        )
-        return rr["name"]
-
-    def get_group(
-        self,
-        id: str,
-        what: str = "Group",
-    ) -> Any:
-        rr = self.glpi.get_item(
-            what,
-            item_id=id,
-            expand_dropdowns=True,
-            range="0-1",
-        )
-        return rr["name"]
-
-    def get_software(
-        self,
-        id: str,
-        what: str = "Software",
-    ) -> Any:
-        rr = self.glpi.get_item(
-            what,
-            item_id=id,
-            expand_dropdowns=True,
-            range="0-1",
-        )
-        return rr["name"]
-
-    def get_status(
-        self,
-        id: str,
-        what: str = "State",
-    ) -> Any:
-        rr = self.glpi.get_item(
-            what,
-            item_id=id,
-            expand_dropdowns=True,
-            range="0-1",
-        )
-        return rr["name"]
-
-    def get_users_active(
-        self,
-        what: str = "User",
-        ignore_left: bool = True,
-        only_active: bool = False,
-    ) -> None:
-        my_range: str = "0-10000"
-
-        u = self.glpi.get_all_items(
-            what,
-            range=my_range,
-        )
-
-        for item in u:
-            self._dumps(item)
-
-            if ignore_left is False:
-                if item["comment"] and "left" in item["comment"]:
-                    continue
-
-            # active
-
-            self.users[item["name"]] = u
-
     def get_user_email(
         self,
         user_name: str,
-        what: str = "UserEmail",
     ) -> str | None:
-        my_range: str = "0-10000"
+        if user_name is None:
+            return None
 
-        u = self.glpi.get_all_items(
-            what,
-            range=my_range,
+        # read from cache
+        return self.emails.get(user_name)
+
+    def get_group_by_name(self, group: str) -> int | None:
+        # return the group id
+        rr = self.glpi.get_all_items(
+            "Group",
+            range="0-10000",
+            searchText={
+                "name": group,
+            },
+            expand_dropdowns=True,
+            only_id=True,
         )
 
-        for item in u:
-            self._dumps(item)
+        if len(rr) == 0:
+            return None
+        return int(rr[0]["id"])
 
-        return None
+    def expand_group_to_emails(
+        self,
+        group: str,
+    ) -> Dict[str, str | None]:
+        # https://*ip*/glpi/apirest.php/group/*groupid*/Group_User
+
+        rr: Dict[str, str | None] = {}
+        group_id = self.get_group_by_name(group)
+
+        print(group_id)
+
+        z = self.glpi.get_sub_items(
+            itemtype="Group",
+            item_id=group_id,
+            sub_itemtype="Group_User",
+            expand_dropdowns=True,
+        )
+        for item in z:
+            user_name = item.get("users_id")
+            if user_name:
+                rr[user_name] = self.emails.get(user_name)
+        return rr
 
     def getLicences(
         self,
-        future: str,  # only loog at licences that will expire around future date
+        future: str,  # only loogkat licences that will expire before future date
         what: str = "SoftwareLicense",
     ) -> Any:
         def orNone(item: Any) -> Any:
             if item == 0:
                 return None
+            if item == "":
+                return None
+
             return item
 
         my_range: str = "0-10000"
@@ -230,14 +213,25 @@ class MyGlpi:
 
             self._dumps(item)
 
+            user = orNone(item.get("users_id_tech"))
+            email = self.get_user_email(user)
+
+            group = orNone(item.get("groups_id_tech"))
+            if self.groups.get(group) is None:
+                self.groups[group] = self.expand_group_to_emails(group)
+
+            emails = self.groups[group]
+
             z = {
                 "name": orNone(item.get("name")),
-                "admin_group": orNone(item.get("groups_id_tech")),
-                "admin_user": orNone(item.get("users_id_tech")),
+                "tech_user": user,
+                "tech_user_email": email,
                 "software": orNone(item.get("softwares_id")),
                 "state": orNone(item.get("states_id")),
                 "expire": orNone(item.get("expire")),
                 "comment": orNone(item.get("comment")),
+                "tech_group": group,
+                "tech_group_emails": emails,
             }
             result.append(z)
 
