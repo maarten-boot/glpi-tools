@@ -206,6 +206,11 @@ class MyGlpi:
         future: str,  # only loog at licences that will expire around future date
         what: str = "SoftwareLicense",
     ) -> Any:
+        def orNone(item: Any) -> Any:
+            if item == 0:
+                return None
+            return item
+
         my_range: str = "0-10000"
 
         u = self.glpi.get_all_items(
@@ -214,35 +219,29 @@ class MyGlpi:
             expand_dropdowns=True,
         )
 
+        result = []
         for item in u:
             exp = item.get("expire")
-            if exp and exp <= future:
-                self._dumps(item)
+            if exp is None or exp > future:
                 continue
 
-                name = item.get("name")
-                admin_group = self.get_group(
-                    id=item.get("groups_id_tech"),
-                )
-                admin_user = self.get_user(
-                    id=item.get("users_id_tech"),
-                )
-                software = self.get_software(
-                    id=item.get("softwares_id"),
-                )
-                state = self.get_status(
-                    id=item.get("states_id"),
-                )
+            if item.get("is_deleted"):
+                continue
 
-                print(
-                    name,
-                    admin_group,
-                    admin_user,
-                    software,
-                    state,
-                )
+            self._dumps(item)
 
-        return None
+            z = {
+                "name": orNone(item.get("name")),
+                "admin_group": orNone(item.get("groups_id_tech")),
+                "admin_user": orNone(item.get("users_id_tech")),
+                "software": orNone(item.get("softwares_id")),
+                "state": orNone(item.get("states_id")),
+                "expire": orNone(item.get("expire")),
+                "comment": orNone(item.get("comment")),
+            }
+            result.append(z)
+
+        return result
 
 
 def main() -> None:
@@ -255,7 +254,8 @@ def main() -> None:
     rr = mg.getLicences(
         str(future),
     )
-    _ = rr
+
+    print(json.dumps(rr, indent=2))
 
 
 main()
