@@ -1,6 +1,7 @@
 from typing import (
-    Dict,
-    Any,
+    # Dict,
+    # Any,
+    List,
 )
 
 import os
@@ -8,11 +9,14 @@ import sys
 import json
 import logging
 import urllib3
+import smtplib
+
+from email.message import EmailMessage
 
 import datetime
 import dateutil.relativedelta
 
-import glpi_api
+from myGlpi import MyGlpi
 
 
 log = logging.getLogger()
@@ -22,7 +26,7 @@ urllib3.disable_warnings(
 )
 
 
-def make_logger(logger: logging.Logger) -> None:
+def make_logger(*, logger: logging.Logger) -> None:
     logger.setLevel(logging.DEBUG)
 
     progName = os.path.basename(sys.argv[0])
@@ -45,211 +49,79 @@ def make_logger(logger: logging.Logger) -> None:
     logger.addHandler(fh)
 
 
-class MyGlpi:
-    def __init__(
-        self,
-        *,
-        verify_certs: bool = False,
-    ) -> None:
-        self.config: Dict[str, Any] = {}
-        self.users: Dict[str, Any] = {}
-        self.groups: Dict[str, Any] = {}
-        self.emails: Dict[str, str] = {}
+def make_email(
+    *,
+    from_email_noreply: str,
+    to: List[str],
+    message: str,
+    subject: str,
+) -> None:
+    mailhost = os.getenv("MAILHOST", None)
+    assert mailhost is not None
 
-        self._get_env()
-        try:
-            self.glpi = glpi_api.GLPI(
-                url=self.env["url"],
-                apptoken=self.env["apptoken"],
-                auth=self.env["usertoken"],
-                verify_certs=verify_certs,
-            )
+    msg = EmailMessage()
+    msg.set_content(message)
+    msg["Subject"] = subject
+    msg["From"] = from_email_noreply
+    msg["To"] = ", ".join(to)
 
-        except glpi_api.GLPIError as e:
-            log.exception(f"{e}")
-            sys.exit(101)
+    print(msg)
 
-        self.config = self.glpi.get_config()
-        self.get_emails()
-
-    def get_emails(
-        self,
-        what: str = "UserEmail",
-    ) -> None:
-        my_range: str = "0-10000"
-
-        u = self.glpi.get_all_items(
-            what,
-            range=my_range,
-            expand_dropdowns=True,
-        )
-
-        for item in u:
-            self._dumps(item)
-            email = item.get("email")
-            login = item.get("users_id")
-            is_default = bool(item.get("is_default"))
-            if is_default:
-                self.emails[login] = email
-
-    @staticmethod
-    def _dumps(item: Any) -> None:
-        return
-
-        print(
-            json.dumps(
-                item,
-                indent=2,
-            ),
-            file=sys.stderr,
-        )
-
-    def _get_env(
-        self,
-    ) -> None:
-        url = os.getenv("GLPI_URL")
-        assert url is not None
-
-        apptoken = os.getenv("GLPI_APPTOKEN")
-        assert apptoken is not None
-
-        usertoken = os.getenv("GLPI_USERTOKEN")
-        assert usertoken is not None
-
-        self.env = {
-            "url": url,
-            "apptoken": apptoken,
-            "usertoken": usertoken,
-        }
-
-    @staticmethod
-    def merge_item_field_names(
-        item: Any,
-        oo: Any,
-    ) -> Dict[str, Any]:
-        rr: Dict[str, Any] = {}
-        for k, v in item.items():
-            rr[oo[k]["name"]] = v
-        return rr
-
-    def get_user_email(
-        self,
-        user_name: str,
-    ) -> str | None:
-        if user_name is None:
-            return None
-
-        # read from cache
-        return self.emails.get(user_name)
-
-    def get_group_by_name(self, group: str) -> int | None:
-        # return the group id
-        rr = self.glpi.get_all_items(
-            "Group",
-            range="0-10000",
-            searchText={
-                "name": group,
-            },
-            expand_dropdowns=True,
-            only_id=True,
-        )
-
-        if len(rr) == 0:
-            return None
-        return int(rr[0]["id"])
-
-    def expand_group_to_emails(
-        self,
-        group: str,
-    ) -> Dict[str, str | None]:
-        # https://*ip*/glpi/apirest.php/group/*groupid*/Group_User
-
-        rr: Dict[str, str | None] = {}
-        group_id = self.get_group_by_name(group)
-
-        print(group_id)
-
-        z = self.glpi.get_sub_items(
-            itemtype="Group",
-            item_id=group_id,
-            sub_itemtype="Group_User",
-            expand_dropdowns=True,
-        )
-        for item in z:
-            user_name = item.get("users_id")
-            if user_name:
-                rr[user_name] = self.emails.get(user_name)
-        return rr
-
-    def getLicences(
-        self,
-        future: str,  # only loogkat licences that will expire before future date
-        what: str = "SoftwareLicense",
-    ) -> Any:
-        def orNone(item: Any) -> Any:
-            if item == 0:
-                return None
-            if item == "":
-                return None
-
-            return item
-
-        my_range: str = "0-10000"
-
-        u = self.glpi.get_all_items(
-            what,
-            range=my_range,
-            expand_dropdowns=True,
-        )
-
-        result = []
-        for item in u:
-            exp = item.get("expire")
-            if exp is None or exp > future:
-                continue
-
-            if item.get("is_deleted"):
-                continue
-
-            self._dumps(item)
-
-            user = orNone(item.get("users_id_tech"))
-            email = self.get_user_email(user)
-
-            group = orNone(item.get("groups_id_tech"))
-            if self.groups.get(group) is None:
-                self.groups[group] = self.expand_group_to_emails(group)
-
-            emails = self.groups[group]
-
-            z = {
-                "name": orNone(item.get("name")),
-                "tech_user": user,
-                "tech_user_email": email,
-                "software": orNone(item.get("softwares_id")),
-                "state": orNone(item.get("states_id")),
-                "expire": orNone(item.get("expire")),
-                "comment": orNone(item.get("comment")),
-                "tech_group": group,
-                "tech_group_emails": emails,
-            }
-            result.append(z)
-
-        return result
+    s = smtplib.SMTP("localhost", 25)
+    s.send_message(msg)
+    s.quit()
 
 
-def main() -> None:
-    make_logger(log)
-
+def email_licencse_expire_soon(
+    *,
+    mg: MyGlpi,
+    days: int = 30,
+) -> None:
     today = datetime.datetime.now().date()
-    future = today - dateutil.relativedelta.relativedelta(days=-30)
+    future = today - dateutil.relativedelta.relativedelta(
+        days=(days * -1),
+    )
 
-    mg = MyGlpi()
     rr = mg.getLicences(
         str(future),
     )
 
-    print(json.dumps(rr, indent=2))
+    url = mg.get_url()
+
+    for item in rr:
+        name = item.get("name")
+        expire = item.get("expire")
+        license_id = item.get("id")
+
+        from_email_noreply = os.getenv("MY_EMAIL_FROM")
+        assert from_email_noreply is not None
+
+        my_mail = os.getenv("MY_EMAIL")
+        assert my_mail is not None
+
+        to = [str(my_mail)]
+        message = f"""
+Licence {name} will expire soon: {expire}
+
+{url}/front/softwarelicense.form.php?id={license_id}
+
+{json.dumps(item, indent = 4)}
+
+        """
+        subject = f"[glpi] licence '{name}' will expire {expire}"
+        make_email(
+            from_email_noreply=str(from_email_noreply),
+            to=to,
+            message=message,
+            subject=subject,
+        )
+
+
+def main() -> None:
+    make_logger(logger=log)
+
+    mg = MyGlpi()
+    email_licencse_expire_soon(mg=mg, days=30)
 
 
 main()
