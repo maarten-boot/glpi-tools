@@ -28,8 +28,8 @@ but you can naturally add them to .bashrc (fedora) or .profile (ubuntu)
 
 pip install glpi-api python-dateutil requests urllib3
 
-the make file builds its own venv
-youcan run the executable with make run via cron
+ - the make file builds its own venv.
+ - you can run the executable with make run via cron
 
 e.g. on Fedora/Centos/Rocky/...
 on monday 08:08 Am
