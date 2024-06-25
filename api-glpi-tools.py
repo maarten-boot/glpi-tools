@@ -133,7 +133,11 @@ Licence {name} will expire soon: {expire}
 
         subject = f"[glpi] licence '{name}' will expire {expire}"
 
-        testing = bool(os.getenv("TESTING", False))
+        z = os.getenv("TESTING")
+        testing = True
+        if z is None or str(z) == "" or int(z) == 0:
+            testing = False
+
         make_email(
             from_email_noreply=str(from_email_noreply),
             to=mails,
