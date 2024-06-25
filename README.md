@@ -18,6 +18,10 @@ we expect to find in the environment:
  - export MAILHOST_PORT="25"
  - export MY_EMAIL_FROM="your from mail noreply most likely"
 
+optional
+
+ -  export TESTING="if not 0 or empty string we are testing and no mails will be send"
+
 The makefile uses:
 
   - ~/.glpi_api.env
