@@ -2,7 +2,7 @@
 
 VENV 				:= ./venv
 ACTIVATE 			:= source ./$(VENV)/bin/activate
-MIN_PYTHON_VERSION	:= python3.10
+MIN_PYTHON_VERSION	:= python3.12
 PL_LINTERS			:=	eradicate,mccabe,pycodestyle,pyflakes,pylint
 LINE_LENGTH 		:= 120
 PACKAGE_NAME 		:= *.py

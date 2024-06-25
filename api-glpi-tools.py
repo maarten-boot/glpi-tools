@@ -76,7 +76,10 @@ def make_email(
         print(msg)
         return
 
-    s = smtplib.SMTP(mailhost, int(mailhost_port),)
+    s = smtplib.SMTP(
+        mailhost,
+        int(mailhost_port),
+    )
     s.send_message(msg)
     s.quit()
 
@@ -124,7 +127,7 @@ Licence {name} will expire soon: {expire}
 
 {url}/front/softwarelicense.form.php?id={license_id}
 
-{json.dumps(item, indent = 4)}
+{json.dumps(item, indent=4)}
 
         """
 

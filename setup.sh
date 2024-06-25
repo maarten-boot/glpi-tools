@@ -13,16 +13,23 @@ prep()
     "${PYTHON}" -V
 
     "${PIP}" -q --disable-pip-version-check install requests python-dateutil
-    "${PIP}" -q --disable-pip-version-check install types-requests
-    "${PIP}" -q --disable-pip-version-check install types-python-dateutil
     "${PIP}" -q --disable-pip-version-check install glpi-api
 
     "${PIP}" freeze >requirements.txt
 }
 
+prep_dev()
+{
+    "${PIP}" -q --disable-pip-version-check install types-requests
+    "${PIP}" -q --disable-pip-version-check install types-python-dateutil
+    "${PIP}" -q --disable-pip-version-check install setuptools
+}
+
 main()
 {
     prep
+
+    prep_dev
 }
 
 main
