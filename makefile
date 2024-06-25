@@ -50,4 +50,4 @@ run:
 	./setup.sh ; \
 	$(ACTIVATE); \
 	source ~/.glpi_api.env; \
-	python3 ./api-glpi-tools.py  | tee 1
+	python3 ./api-glpi-tools.py  2>2 | tee 1

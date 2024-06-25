@@ -13,7 +13,7 @@ import urllib3
 import glpi_api
 
 
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 
 urllib3.disable_warnings(
     urllib3.exceptions.InsecureRequestWarning,
@@ -25,11 +25,16 @@ class MyGlpi:
         self,
         *,
         verify_certs: bool = False,
+        debug: bool = False,
     ) -> None:
+        self.debug = debug
         self.config: Dict[str, Any] = {}
         self.users: Dict[str, Any] = {}
         self.groups: Dict[str, Any] = {}
         self.emails: Dict[str, str] = {}
+        self.version: str | None = None
+        self.admin_email: str | None = None
+        self.types: Dict[str, Any] = {}
 
         self._get_env()
         try:
@@ -45,12 +50,50 @@ class MyGlpi:
             sys.exit(101)
 
         self.config = self.glpi.get_config()
-        self.get_emails()
+        self.version = self.config.get("cfg_glpi", {}).get("version")
+        self.admin_email = self.config.get("cfg_glpi", {}).get("admin_email")
+        self._extract_types()
+        self._get_emails()
 
-    def get_url(self) -> str:
+    def get_admin_email(
+        self,
+    ) -> str:
+        assert self.admin_email is not None
+        return str(self.admin_email)
+
+    def _extract_types(
+        self,
+    ) -> None:
+        self.types = {}
+        z = self.config.get("cfg_glpi")
+        assert z is not None
+        # print(json.dumps(z, indent=2))
+
+        for key, val in z.items():
+            # look for keys ending in '_types'
+            k = "_types"
+            if not key.endswith("_types"):
+                continue
+
+            if key in ["default_impact_asset_types", "impact_asset_types"]:
+                continue
+
+            type_name = key[: (len(k) * -1)]
+            # print(key, type_name, val)
+
+            for item_name in val:
+                if item_name not in self.types:
+                    self.types[item_name] = []
+                self.types[item_name].append(type_name)
+
+        self._dumps(self.types)
+
+    def get_url(
+        self,
+    ) -> str:
         return self.env["url"]
 
-    def get_emails(
+    def _get_emails(
         self,
         what: str = "UserEmail",
     ) -> None:
@@ -66,13 +109,17 @@ class MyGlpi:
             self._dumps(item)
             email = item.get("email")
             login = item.get("users_id")
+
             is_default = bool(item.get("is_default"))
             if is_default:
                 self.emails[login] = email
 
-    @staticmethod
-    def _dumps(item: Any) -> None:
-        return
+    def _dumps(
+        self,
+        item: Any,
+    ) -> None:
+        if self.debug is False:
+            return
 
         print(
             json.dumps(
@@ -120,7 +167,10 @@ class MyGlpi:
         # read from cache
         return self.emails.get(user_name)
 
-    def get_group_by_name(self, group: str) -> int | None:
+    def get_group_by_name(
+        self,
+        group: str,
+    ) -> int | None:
         # return the group id
         rr = self.glpi.get_all_items(
             "Group",
@@ -140,12 +190,9 @@ class MyGlpi:
         self,
         group: str,
     ) -> Dict[str, str | None]:
-        # https://*ip*/glpi/apirest.php/group/*groupid*/Group_User
+        # /apirest.php/group/*groupid*/Group_User
 
-        rr: Dict[str, str | None] = {}
         group_id = self.get_group_by_name(group)
-
-        print(group_id)
 
         z = self.glpi.get_sub_items(
             itemtype="Group",
@@ -153,15 +200,18 @@ class MyGlpi:
             sub_itemtype="Group_User",
             expand_dropdowns=True,
         )
+
+        rr: Dict[str, str | None] = {}
         for item in z:
             user_name = item.get("users_id")
             if user_name:
                 rr[user_name] = self.emails.get(user_name)
+
         return rr
 
     def getLicences(
         self,
-        future: str,  # only loogkat licences that will expire before future date
+        future: str,  # only look at licences that will expire before future date
         what: str = "SoftwareLicense",
     ) -> Any:
         def orNone(item: Any) -> Any:

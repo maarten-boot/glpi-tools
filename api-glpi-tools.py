@@ -1,6 +1,6 @@
 from typing import (
-    # Dict,
-    # Any,
+    Dict,
+    Any,
     List,
 )
 
@@ -66,29 +66,40 @@ def make_email(
     msg["To"] = ", ".join(to)
 
     print(msg)
+    return
 
     s = smtplib.SMTP("localhost", 25)
     s.send_message(msg)
     s.quit()
 
 
+def extract_mails(
+    item: Dict[str, Any],
+) -> List[str]:
+    mails = []
+
+    k = "tech_user_email"
+    mail = item.get(k)
+    if mail:
+        mails.append(mail)
+
+    k = "tech_group_emails"
+    mail = item.get(k)
+    if mail:
+        for k, v in mail.items():
+            mails.append(v)
+
+    return mails
+
+
 def email_licencse_expire_soon(
     *,
-    mg: MyGlpi,
-    days: int = 30,
+    future: str,
+    data: List[Dict[str, Any]],
+    url: str,
+    admin_email: str,
 ) -> None:
-    today = datetime.datetime.now().date()
-    future = today - dateutil.relativedelta.relativedelta(
-        days=(days * -1),
-    )
-
-    rr = mg.getLicences(
-        str(future),
-    )
-
-    url = mg.get_url()
-
-    for item in rr:
+    for item in data:
         name = item.get("name")
         expire = item.get("expire")
         license_id = item.get("id")
@@ -96,10 +107,10 @@ def email_licencse_expire_soon(
         from_email_noreply = os.getenv("MY_EMAIL_FROM")
         assert from_email_noreply is not None
 
-        my_mail = os.getenv("MY_EMAIL")
-        assert my_mail is not None
+        mails = extract_mails(item=item)
+        if len(mails) == 0:
+            mails.append(admin_email)
 
-        to = [str(my_mail)]
         message = f"""
 Licence {name} will expire soon: {expire}
 
@@ -111,7 +122,7 @@ Licence {name} will expire soon: {expire}
         subject = f"[glpi] licence '{name}' will expire {expire}"
         make_email(
             from_email_noreply=str(from_email_noreply),
-            to=to,
+            to=mails,
             message=message,
             subject=subject,
         )
@@ -119,9 +130,31 @@ Licence {name} will expire soon: {expire}
 
 def main() -> None:
     make_logger(logger=log)
+    days = 30
 
-    mg = MyGlpi()
-    email_licencse_expire_soon(mg=mg, days=30)
+    mg = MyGlpi(
+        verify_certs=False,
+        debug=False,
+    )
+
+    today = datetime.datetime.now().date()
+    future = today - dateutil.relativedelta.relativedelta(
+        days=(days * -1),
+    )
+
+    url = mg.get_url()
+    admin_email = mg.get_admin_email()
+
+    rr = mg.getLicences(
+        str(future),
+    )
+
+    email_licencse_expire_soon(
+        future=str(future),
+        data=rr,
+        url=url,
+        admin_email=admin_email,
+    )
 
 
 main()
