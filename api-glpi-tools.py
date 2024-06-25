@@ -55,9 +55,16 @@ def make_email(
     to: List[str],
     message: str,
     subject: str,
+    testing: bool = False,
 ) -> None:
+    print(testing)
+    exit(0)
+
     mailhost = os.getenv("MAILHOST", None)
     assert mailhost is not None
+
+    mailhost_port = os.getenv("MAILHOST_PORT", None)
+    assert mailhost_port is not None
 
     msg = EmailMessage()
     msg.set_content(message)
@@ -65,10 +72,11 @@ def make_email(
     msg["From"] = from_email_noreply
     msg["To"] = ", ".join(to)
 
-    print(msg)
-    return
+    if testing:
+        print(msg)
+        return
 
-    s = smtplib.SMTP("localhost", 25)
+    s = smtplib.SMTP(mailhost, int(mailhost_port),)
     s.send_message(msg)
     s.quit()
 
@@ -119,12 +127,16 @@ Licence {name} will expire soon: {expire}
 {json.dumps(item, indent = 4)}
 
         """
+
         subject = f"[glpi] licence '{name}' will expire {expire}"
+
+        testing = bool(os.getenv("TESTING", False))
         make_email(
             from_email_noreply=str(from_email_noreply),
             to=mails,
             message=message,
             subject=subject,
+            testing=testing,
         )
 
 
