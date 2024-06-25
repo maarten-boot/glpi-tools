@@ -57,9 +57,6 @@ def make_email(
     subject: str,
     testing: bool = False,
 ) -> None:
-    print(testing)
-    exit(0)
-
     mailhost = os.getenv("MAILHOST", None)
     assert mailhost is not None
 
