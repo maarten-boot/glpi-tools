@@ -2,7 +2,7 @@
 
 PIP="${VENV}/bin/pip3"
 PYTHON="${VENV}/bin/python3"
-
+P3_INSTALL="${PIP} -q --disable-pip-version-check install"
 prep()
 {
     rm -rf "${VENV}"
@@ -12,17 +12,22 @@ prep()
 
     "${PYTHON}" -V
 
-    "${PIP}" -q --disable-pip-version-check install requests python-dateutil
-    "${PIP}" -q --disable-pip-version-check install glpi-api
+    ${P3_INSTALL} python-dateutil
+    ${P3_INSTALL} requests
+    ${P3_INSTALL} glpi-api
+
+    ${P3_INSTALL} cryptography
+    ${P3_INSTALL} pyOpenSSL
 
     "${PIP}" freeze >requirements.txt
 }
 
 prep_dev()
 {
-    "${PIP}" -q --disable-pip-version-check install types-requests
-    "${PIP}" -q --disable-pip-version-check install types-python-dateutil
-    "${PIP}" -q --disable-pip-version-check install setuptools
+    ${P3_INSTALL} types-requests
+    ${P3_INSTALL} types-python-dateutil
+    ${P3_INSTALL} setuptools
+    ${P3_INSTALL} types-pyOpenSSL
 }
 
 main()
