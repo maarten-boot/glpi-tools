@@ -49,18 +49,18 @@ mypy: clean
 	$(P3_INSTALL) mypy; \
 	mypy --ignore-missing-imports --strict --no-incremental $(PACKAGE_NAME)
 
-run: run-license
+run: run-license run-cert-test
 
 run-license:
 	./setup.sh ; \
 	$(ACTIVATE); \
 	source ~/.glpi_api.env; \
-	python3 ./api-glpi-tools.py license_expire_test 2>2 | tee 1
+	python3 ./api-glpi-tools.py license_expire_test 2>$@.2 | tee $@.1
 
 run-cert-test:
 	./setup.sh ; \
 	$(ACTIVATE); \
 	source ~/.glpi_api.env; \
-	python3 ./api-glpi-tools.py certificate_test_valid 2>2 | tee 1
+	python3 ./api-glpi-tools.py certificate_test_valid 2>$@.2 | tee $@.1
 
 

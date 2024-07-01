@@ -108,3 +108,36 @@ class MyArgs:
 
     def get_args(self) -> Dict[str, Any]:
         return self.args
+
+    @staticmethod
+    def make_logger(
+        *,
+        logger: logging.Logger,
+    ) -> None:
+        logger.setLevel(logging.DEBUG)
+
+        progName = os.path.basename(sys.argv[0])
+        if progName.endswith(".py"):
+            progName = progName[:-3]
+        fileName = f"{progName}.log"
+
+        fh = logging.FileHandler(fileName)
+        fh.setLevel(logging.INFO)
+
+        ch = logging.StreamHandler()
+        ch.setLevel(
+            os.getenv(
+                "LOG_LEVEL",
+                "WARNING",
+            ),
+        )
+
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        ch.setFormatter(formatter)
+        fh.setFormatter(formatter)
+
+        # add the handlers to logger
+        logger.addHandler(ch)
+        logger.addHandler(fh)
